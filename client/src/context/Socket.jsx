@@ -9,8 +9,10 @@ const useSocket = ()=>{
 }
 
 const SocketProvider = ({children}) =>{
+    const socket = useMemo(()=>io(import.meta.env.VITE_BACKEND_URL, {
+    transports: ["websocket"]
+}));
 
-    const socket = useMemo(()=> io(`https://962d20646578.ngrok-free.app`), [])
 
     return (
         <socketContext.Provider value={socket}>
