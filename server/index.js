@@ -17,7 +17,7 @@ const emailIds = new Map();
 
 app.use(bodyParser.json());
 app.use(cors({
-    origin : ["http://localhost:5173", "http://localhost:5174"],
+    origin : ["http://localhost:5173", "http://localhost:5174", "rtc-roan-eight.vercel.app"],
     credentials : true
 }));
 app.get('/', (req, res)=>{

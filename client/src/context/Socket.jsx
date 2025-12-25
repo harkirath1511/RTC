@@ -10,7 +10,7 @@ const useSocket = ()=>{
 
 const SocketProvider = ({children}) =>{
 
-    const socket = useMemo(()=> io(`http://localhost:8000`), [])
+    const socket = useMemo(()=> io(`https://962d20646578.ngrok-free.app`), [])
 
     return (
         <socketContext.Provider value={socket}>
