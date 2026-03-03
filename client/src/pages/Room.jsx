@@ -17,7 +17,7 @@ function Room() {
     const myVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
 
-    // Refs for synchronous access in event handlers (no stale closure issues)
+    
     const remoteEmailRef = useRef(null);
     const iceCandidateBuffer = useRef([]);
 
@@ -25,14 +25,14 @@ function Room() {
     const socket = useSocket();
     const params = useParams();
 
-    // Helper: update remoteEmail in both state and ref
+    
     const updateRemoteEmail = useCallback((email) => {
         remoteEmailRef.current = email;
         setRemoteEmail(email);
     }, []);
 
 
-    // Track ICE connection state for UI
+    
     const wasConnectedRef = useRef(false);
 
     useEffect(() => {
@@ -54,8 +54,8 @@ function Room() {
                 toast.error('Connection failed');
                 wasConnectedRef.current = false;
             } else if (state === 'checking') {
-                // During renegotiation, ICE briefly goes back to 'checking'.
-                // Don't flash the UI to 'connecting' if we were already connected.
+                
+                
                 if (!wasConnectedRef.current) {
                     setConnectionState('connecting');
                 }
@@ -100,7 +100,7 @@ function Room() {
         const reqSender = data.from;
         console.log(`Incoming request from ${reqSender} with offer : `, offer);
 
-        // Check if this is a renegotiation (we already have a remote peer)
+        
         const isRenegotiation = wasConnectedRef.current || !!peer.remoteDescription;
         updateRemoteEmail(reqSender);
 
@@ -180,9 +180,9 @@ function Room() {
             setIsSending(true);
             toast.success('Sharing your video');
             if (remoteEmail) {
-                // If ICE is still checking from a previous renegotiation, wait
-                // for it to settle before starting another one. Sending a new offer
-                // while ICE is mid-check causes the ICE agent to restart and disconnect.
+                
+                
+                
                 if (peer.iceConnectionState === 'checking') {
                     console.log('Waiting for ICE to settle before renegotiating...');
                     await new Promise((resolve) => {
@@ -194,7 +194,7 @@ function Room() {
                             }
                         };
                         peer.addEventListener('iceconnectionstatechange', onStateChange);
-                        // Safety timeout so we don't hang forever
+                        
                         setTimeout(() => {
                             peer.removeEventListener('iceconnectionstatechange', onStateChange);
                             resolve();
@@ -238,7 +238,7 @@ function Room() {
     }, [myStream]);
 
 
-    // Outgoing ICE candidates — use ref so the handler never has a stale email
+    
     useEffect(() => {
         const handleIceCandidate = (event) => {
             if (event.candidate && remoteEmailRef.current) {
@@ -253,7 +253,7 @@ function Room() {
         return () => peer.removeEventListener('icecandidate', handleIceCandidate);
     }, [peer, socket]);
 
-    // Flush buffered ICE candidates once remote description is set
+    
     const flushIceCandidates = useCallback(async () => {
         while (iceCandidateBuffer.current.length > 0) {
             const candidate = iceCandidateBuffer.current.shift();
@@ -266,14 +266,14 @@ function Room() {
         }
     }, [peer]);
 
-    // Whenever remote description changes, flush the buffer
+    
     useEffect(() => {
         if (peer.remoteDescription) {
             flushIceCandidates();
         }
     }, [peer.remoteDescription, flushIceCandidates]);
 
-    // Incoming ICE candidates — buffer if remote description not yet set
+    
     const handleIceCandidate = useCallback(async (data) => {
         const { candidate } = data;
         try {
@@ -306,7 +306,7 @@ function Room() {
       
     }, [socket, handleIncomingReq, handleUserJoined, handleIncomingRes, handleUserReady, handleIceCandidate]);
 
-    // Signal readiness AFTER listeners are set up
+    
     useEffect(() => {
         socket.emit('user-ready', { roomId: params.roomId });
     }, []);
