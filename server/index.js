@@ -64,7 +64,22 @@ io.on("connection", (socket) =>{
         console.log(`Response sending to ${email} by ${sender}`);
         socket.to(socketId).emit('incoming-res', {from : sender, answer});
     })
-    
+
+    socket.on('user-ready', (data) => {
+        const { roomId } = data;
+        const email = emailIds.get(socket.id);
+        console.log(`User ${email} is ready in room ${roomId}`);
+        socket.to(roomId).emit('user-ready', { email });
+    });
+
+    socket.on('ice-candidate', (data) => {
+        const { email, candidate } = data;
+        const socketId = socketIds.get(email);
+        const sender = emailIds.get(socket.id);
+        if (socketId) {
+            io.to(socketId).emit('ice-candidate', { from: sender, candidate });
+        }
+    });
 })
 
 server.listen(8000, ()=>{

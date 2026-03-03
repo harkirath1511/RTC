@@ -48,7 +48,11 @@ import { useMemo } from 'react';
             const tracks = stream.getTracks();
             console.log("Setting stream ...")
             for(const track of tracks){
-                peer.addTrack(track, stream);
+                const senders = peer.getSenders();
+                const sender = senders.find(s => s.track === track);
+                if(!sender){
+                    peer.addTrack(track, stream);
+                }
             }
         }
 
@@ -63,9 +67,21 @@ import { useMemo } from 'react';
 
         useEffect(() => {
           peer.addEventListener('track', handleTrackEvent);
+          
+          const handleNegotiationNeeded = () => {
+              console.log("Negotiation Needed triggered");
+          };
+          peer.addEventListener('negotiationneeded', handleNegotiationNeeded);
+
+          const handleIceStateChange = () => {
+              console.log("ICE Connection State:", peer.iceConnectionState);
+          };
+          peer.addEventListener('iceconnectionstatechange', handleIceStateChange);
 
           return ()=>{
             peer.removeEventListener('track', handleTrackEvent);
+            peer.removeEventListener('negotiationneeded', handleNegotiationNeeded);
+            peer.removeEventListener('iceconnectionstatechange', handleIceStateChange);
           }
         }, [peer, handleTrackEvent])
         
