@@ -17,26 +17,48 @@ function Room() {
     const myVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
 
+    // Refs for synchronous access in event handlers (no stale closure issues)
+    const remoteEmailRef = useRef(null);
+    const iceCandidateBuffer = useRef([]);
+
     const {peer, createOffer, createAnswer, setRemoteAns, sendStream, remoteStream} = getPeerContext();
     const socket = useSocket();
     const params = useParams();
 
+    // Helper: update remoteEmail in both state and ref
+    const updateRemoteEmail = useCallback((email) => {
+        remoteEmailRef.current = email;
+        setRemoteEmail(email);
+    }, []);
+
 
     // Track ICE connection state for UI
+    const wasConnectedRef = useRef(false);
+
     useEffect(() => {
         const handleIceChange = () => {
             const state = peer.iceConnectionState;
             if (state === 'connected' || state === 'completed') {
+                const isFirstConnect = !wasConnectedRef.current;
+                wasConnectedRef.current = true;
                 setConnectionState('connected');
-                toast.success('Peer connection established!');
+                if (isFirstConnect) {
+                    toast.success('Peer connection established!');
+                }
             } else if (state === 'disconnected') {
                 setConnectionState('disconnected');
                 toast('Peer disconnected', { icon: '⚠️' });
+                wasConnectedRef.current = false;
             } else if (state === 'failed') {
                 setConnectionState('failed');
                 toast.error('Connection failed');
+                wasConnectedRef.current = false;
             } else if (state === 'checking') {
-                setConnectionState('connecting');
+                // During renegotiation, ICE briefly goes back to 'checking'.
+                // Don't flash the UI to 'connecting' if we were already connected.
+                if (!wasConnectedRef.current) {
+                    setConnectionState('connecting');
+                }
             }
         };
         peer.addEventListener('iceconnectionstatechange', handleIceChange);
@@ -47,7 +69,7 @@ function Room() {
     const handleUserJoined = useCallback((data) =>{
         const {email} = data;
         console.log(`User ${email} joined this room`);
-        setRemoteEmail(email);
+        updateRemoteEmail(email);
         toast((t) => (
             <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0">
@@ -64,11 +86,11 @@ function Room() {
     const handleUserReady = useCallback(async(data) =>{
         const {email} = data;
         console.log(`User ${email} is ready, initiating offer`);
-        setRemoteEmail(email);
+        updateRemoteEmail(email);
         const offer = await createOffer();
         socket.emit('reqUser', {email, offer});
         console.log(`Sending offer to ${email}`);
-    }, [socket, createOffer]);
+    }, [socket, createOffer, updateRemoteEmail]);
     
 
     const handleIncomingReq = useCallback(async (data)=> {
@@ -77,14 +99,22 @@ function Room() {
 
         const reqSender = data.from;
         console.log(`Incoming request from ${reqSender} with offer : `, offer);
-        setRemoteEmail(reqSender);
-        setConnectionState('connecting');
-        toast('Connecting...', { icon: '🔗', duration: 2000 });
+
+        // Check if this is a renegotiation (we already have a remote peer)
+        const isRenegotiation = wasConnectedRef.current || !!peer.remoteDescription;
+        updateRemoteEmail(reqSender);
+
+        if (!isRenegotiation) {
+            setConnectionState('connecting');
+            toast('Connecting...', { icon: '🔗', duration: 2000 });
+        } else {
+            console.log('Renegotiation offer received, updating SDP...');
+        }
 
         const answer = await createAnswer(offer);
         socket.emit('sendRes', { email : reqSender, answer });
         
-    }, [socket, createAnswer]);
+    }, [socket, createAnswer, updateRemoteEmail, peer]);
 
 
     const handleIncomingRes = useCallback(async (data)=>{
@@ -186,25 +216,51 @@ function Room() {
     }, [myStream]);
 
 
-    // ICE candidate handling
+    // Outgoing ICE candidates — use ref so the handler never has a stale email
     useEffect(() => {
         const handleIceCandidate = (event) => {
-            if (event.candidate && remoteEmail) {
+            if (event.candidate && remoteEmailRef.current) {
+                console.log('Sending ICE candidate to', remoteEmailRef.current);
                 socket.emit('ice-candidate', {
-                    email: remoteEmail,
+                    email: remoteEmailRef.current,
                     candidate: event.candidate
                 });
             }
         };
         peer.addEventListener('icecandidate', handleIceCandidate);
         return () => peer.removeEventListener('icecandidate', handleIceCandidate);
-    }, [peer, remoteEmail, socket]);
+    }, [peer, socket]);
 
+    // Flush buffered ICE candidates once remote description is set
+    const flushIceCandidates = useCallback(async () => {
+        while (iceCandidateBuffer.current.length > 0) {
+            const candidate = iceCandidateBuffer.current.shift();
+            try {
+                await peer.addIceCandidate(candidate);
+                console.log('Flushed buffered ICE candidate');
+            } catch (e) {
+                console.error('Error flushing ICE candidate:', e);
+            }
+        }
+    }, [peer]);
+
+    // Whenever remote description changes, flush the buffer
+    useEffect(() => {
+        if (peer.remoteDescription) {
+            flushIceCandidates();
+        }
+    }, [peer.remoteDescription, flushIceCandidates]);
+
+    // Incoming ICE candidates — buffer if remote description not yet set
     const handleIceCandidate = useCallback(async (data) => {
-        const { candidate, from } = data;
+        const { candidate } = data;
         try {
             if (peer.remoteDescription) {
                 await peer.addIceCandidate(candidate);
+                console.log('Added ICE candidate directly');
+            } else {
+                console.log('Buffering ICE candidate (no remote desc yet)');
+                iceCandidateBuffer.current.push(candidate);
             }
         } catch (e) {
             console.error('Error adding ICE candidate:', e);
