@@ -180,12 +180,34 @@ function Room() {
             setIsSending(true);
             toast.success('Sharing your video');
             if (remoteEmail) {
+                // If ICE is still checking from a previous renegotiation, wait
+                // for it to settle before starting another one. Sending a new offer
+                // while ICE is mid-check causes the ICE agent to restart and disconnect.
+                if (peer.iceConnectionState === 'checking') {
+                    console.log('Waiting for ICE to settle before renegotiating...');
+                    await new Promise((resolve) => {
+                        const onStateChange = () => {
+                            const s = peer.iceConnectionState;
+                            if (s === 'connected' || s === 'completed' || s === 'failed' || s === 'disconnected') {
+                                peer.removeEventListener('iceconnectionstatechange', onStateChange);
+                                resolve();
+                            }
+                        };
+                        peer.addEventListener('iceconnectionstatechange', onStateChange);
+                        // Safety timeout so we don't hang forever
+                        setTimeout(() => {
+                            peer.removeEventListener('iceconnectionstatechange', onStateChange);
+                            resolve();
+                        }, 8000);
+                    });
+                    console.log(`ICE settled: ${peer.iceConnectionState}`);
+                }
                 const offer = await createOffer();
                 socket.emit('reqUser', {email: remoteEmail, offer});
                 console.log(`Renegotiating with ${remoteEmail}`);
             }
         }
-    }, [myStream, sendStream, remoteEmail, createOffer, socket]);
+    }, [myStream, sendStream, remoteEmail, createOffer, socket, peer]);
 
     const toggleMute = useCallback(() => {
         if (myStream) {
