@@ -34,3 +34,4 @@ jobs:
     - run: npm ci --prefix server
     - run: npm run build --if-present --prefix client
     - run: npm run build --if-present --prefix server
+    - run: sudo pm2 restart node-backend
