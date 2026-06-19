@@ -31,4 +31,4 @@ jobs:
           server/package-lock.json
     - run: npm ci --prefix server
     - run: npm run build --if-present --prefix server
-    - run: pm2 restart node-backend
+    - run: cd server && pm2 restart node-backend
