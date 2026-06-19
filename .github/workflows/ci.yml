@@ -7,6 +7,9 @@ on:
   push:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
 
@@ -30,3 +33,4 @@ jobs:
     - run: npm ci --prefix client
     - run: npm ci --prefix server
     - run: npm run build --if-present --prefix client
+    - run: npm run build --if-present --prefix server
