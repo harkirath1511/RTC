@@ -24,6 +24,10 @@ app.get('/', (req, res)=>{
     return res.json("Server listening!");
 })
 
+app.get('/test', (req, res)=>{
+    return res.json("HEALTH CHECK OK!")
+})
+
 
 
 
